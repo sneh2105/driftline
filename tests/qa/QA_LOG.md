@@ -62,3 +62,10 @@
 **Findings:** none
 **Why these tests:** They cover the delivery defaults, payload handoff, channel failure isolation, and SMTP activation rules specified in SPEC section 11.
 **Verified:** `pytest tests/qa/test_digest_delivery.py -q` - 4 passed, 0 xfailed.
+
+## 2026-11-06 23:09 - qa/first-pass - pending
+**Focus:** Guardrail depth (SPEC 12)
+**Tests added:** 9 cases in test_guardrail_depth.py: cross-project run detail returns 404; limit bounds 0, 1, 200, and 201; non-HTTP schemes return 422; bad JSON and timeout adapter errors are inconclusive; and link-local adapter targets are rejected.
+**Findings:** BUG-4 SECURITY: http://169.254.169.254/ is accepted as an adapter target, contrary to the focus area's SSRF security expectation; strict xfail. Adapter errors produced inconclusive probe results as specified.
+**Why these tests:** They cover run ownership, exact list bounds, scheme validation, adapter failure handling, and guard against requests to cloud metadata endpoints.
+**Verified:** `pytest tests/qa/test_guardrail_depth.py -q` - 9 passed, 1 xfailed; `pytest tests/qa -q` - 65 passed, 4 xfailed.
