@@ -1,6 +1,6 @@
 # Builder backlog (builder ticks these; humans can reorder/add)
 
-- [ ] Project + API key management: CLI and endpoint to create projects and rotate keys; store keys hashed, never plaintext; demo key only exists when seeded
+- [x] Project + API key management: CLI and endpoint to create projects and rotate keys; store keys hashed, never plaintext; demo key only exists when seeded
 - [ ] Reconcile SPEC.md with actual behavior; fix code or spec for every mismatch and log which
 - [ ] Rate limit ingest endpoints and cap request body at 1MB; document in SPEC.md
 - [ ] Config via env vars (DB path, CORS origins); default CORS to localhost only
