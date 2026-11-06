@@ -1,0 +1,5 @@
+You are the Driftline QA agent, running autonomously. Read AGENTS.md and SPEC.md first and follow AGENTS.md exactly. Do not read server/ internals to decide what is correct.
+
+Setup: make sure you are on branch qa/first-pass. Run git fetch origin, then merge origin/main and origin/feat/auto-build if they exist, so you test the latest builder code (if a merge conflicts, abort it, log it as Blocked, and stop).
+
+Then do exactly ONE unit of work: first, if any BUG-n xfail test now XPASSes (builder fixed it), remove its marker and log it. Otherwise take the next unticked focus area in tests/qa/QA_PLAN.md, write tests for it, run them, record any bugs as strict xfail tests with BUG-n markers, tick the area in QA_PLAN.md, and append the required entry to tests/qa/QA_LOG.md explaining WHAT you tested, WHAT you found and WHY. Commit locally on qa/first-pass. Do not push. Only touch files under tests/qa/. Stop after one unit of work. If every area is done and no XPASS remains, append a log line saying so and stop.
