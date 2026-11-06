@@ -69,7 +69,7 @@ def main():
     rng = random.Random(7)
 
     with db.conn() as c:
-        row = c.execute("SELECT id FROM projects WHERE api_key=?", (DEMO_KEY,)).fetchone()
+        row = db.project_for_key(DEMO_KEY)
         if row:
             pid = row["id"]
             c.execute("DELETE FROM approvals WHERE project_id=?", (pid,))

@@ -129,6 +129,70 @@ def test_overview_flags_rubber_stamper(client):
     assert det["flags"] and len(det["histogram"]) == 6
 
 
+# ---- project + key management ----
+
+def test_api_key_stored_hashed_not_plaintext(client):
+    from server import db
+    with db.conn() as c:
+        row = c.execute("SELECT api_key_hash FROM projects WHERE name='t'").fetchone()
+    assert row["api_key_hash"] != "dl_test"
+    assert db.project_for_key("dl_test") is not None
+
+
+def test_rotate_key_invalidates_old_key(client):
+    from server import db
+    p = db.create_project("rot")
+    old_key = p["api_key"]
+    assert db.project_for_key(old_key) is not None
+    rotated = db.rotate_key(p["id"])
+    assert rotated["api_key"] != old_key
+    assert db.project_for_key(old_key) is None
+    assert db.project_for_key(rotated["api_key"])["id"] == p["id"]
+
+
+def test_rotate_key_unknown_project_raises(client):
+    from server import db
+    with pytest.raises(KeyError):
+        db.rotate_key(999999)
+
+
+def test_admin_endpoints_disabled_without_admin_key(client):
+    r = client.post("/v1/admin/projects", json={"name": "x"})
+    assert r.status_code == 403
+
+
+def test_admin_create_project_and_rotate_key(monkeypatch, tmp_path):
+    monkeypatch.setenv("DRIFTLINE_DB", str(tmp_path / "admin.db"))
+    monkeypatch.setenv("DRIFTLINE_ADMIN_KEY", "admin-secret")
+    import importlib
+    from server import db
+    importlib.reload(db)
+    from server import app as appmod
+    importlib.reload(appmod)
+    from fastapi.testclient import TestClient
+    db.init()
+    with TestClient(appmod.app) as c:
+        r = c.post("/v1/admin/projects", json={"name": "newco"}, headers={"X-Driftline-Admin-Key": "wrong"})
+        assert r.status_code == 401
+        r = c.post("/v1/admin/projects", json={"name": "newco"}, headers={"X-Driftline-Admin-Key": "admin-secret"})
+        assert r.status_code == 201
+        body = r.json()
+        assert body["name"] == "newco" and body["api_key"].startswith("dl_")
+        pid = body["id"]
+        r = c.get("/v1/overview", headers={"X-Driftline-Key": body["api_key"]})
+        assert r.status_code == 200
+        r = c.post(f"/v1/admin/projects/{pid}/rotate-key", headers={"X-Driftline-Admin-Key": "admin-secret"})
+        assert r.status_code == 200
+        new_key = r.json()["api_key"]
+        assert new_key != body["api_key"]
+        r = c.get("/v1/overview", headers={"X-Driftline-Key": body["api_key"]})
+        assert r.status_code == 401
+        r = c.get("/v1/overview", headers={"X-Driftline-Key": new_key})
+        assert r.status_code == 200
+        r = c.post(f"/v1/admin/projects/999999/rotate-key", headers={"X-Driftline-Admin-Key": "admin-secret"})
+        assert r.status_code == 404
+
+
 def test_sdk_roundtrip(client, monkeypatch):
     """SDK against the real app via TestClient transport."""
     import driftline

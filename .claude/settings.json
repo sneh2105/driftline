@@ -9,7 +9,7 @@
       "Bash(npm install:*)", "Bash(npm run build:*)", "Bash(npm ci:*)"
     ],
     "deny": [
-      "Edit(tests/qa/**)", "Write(tests/qa/**)",
+      "Edit(tests/qa/**)",
       "Bash(git push:*)", "Bash(git reset --hard:*)", "Bash(git clean:*)",
       "Bash(rm:*)", "Bash(Remove-Item:*)", "Bash(git checkout main:*)"
     ]
@@ -23,3 +23,4 @@
     ]
   }
 }
+

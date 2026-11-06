@@ -16,6 +16,14 @@ Fields: approver (str 1-200, required), action (str 1-500, required), decision (
 
 ## 3. Auth
 `X-Driftline-Key` or `Authorization: Bearer`. Missing/invalid -> 401. Every query is scoped to the key's project. A key must never see another project's data.
+API keys are stored as a SHA-256 hash only; the plaintext is shown once, at creation or rotation, and cannot be recovered afterward (rotate instead).
+
+### Project + key management
+- CLI (`python manage.py create-project "<name>"` / `python manage.py rotate-key <project_id>`) always works locally.
+- Admin HTTP endpoints require `X-Driftline-Admin-Key` to match env var `DRIFTLINE_ADMIN_KEY`; if that env var is unset, the endpoints are disabled (403) rather than open.
+  - `POST /v1/admin/projects` {name} -> 201 {id, name, api_key}
+  - `POST /v1/admin/projects/{id}/rotate-key` -> 200 {id, name, api_key}; unknown id -> 404
+- The demo key (`dl_demo_key`) only exists after running `seed.py`; nothing creates it otherwise.
 
 ## 4. Scoring (per approver over window)
 score = speed(0-40) + rejects(0-30) + risk_sensitivity(0-30), rounded to 0.1, range [0,100].

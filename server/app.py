@@ -40,6 +40,35 @@ def project(x_driftline_key: Optional[str] = Header(None), authorization: Option
     return p
 
 
+ADMIN_KEY = os.environ.get("DRIFTLINE_ADMIN_KEY")
+
+
+def require_admin(x_driftline_admin_key: Optional[str] = Header(None)):
+    if not ADMIN_KEY:
+        raise HTTPException(403, "Admin endpoints disabled. Set DRIFTLINE_ADMIN_KEY to enable.")
+    if not x_driftline_admin_key or x_driftline_admin_key != ADMIN_KEY:
+        raise HTTPException(401, "Invalid admin key.")
+
+
+# ---------- admin: projects + keys ----------
+
+class ProjectIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+@app.post("/v1/admin/projects", status_code=201)
+def admin_create_project(body: ProjectIn, _=Depends(require_admin)):
+    return db.create_project(body.name)
+
+
+@app.post("/v1/admin/projects/{project_id}/rotate-key")
+def admin_rotate_key(project_id: int, _=Depends(require_admin)):
+    try:
+        return db.rotate_key(project_id)
+    except KeyError:
+        raise HTTPException(404, "Unknown project")
+
+
 # ---------- ingest ----------
 
 def _to_epoch(v: Union[float, int, str]) -> float:

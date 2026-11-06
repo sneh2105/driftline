@@ -1,3 +1,4 @@
+import hashlib
 import os
 import sqlite3
 import secrets
@@ -10,7 +11,7 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS projects (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
-    api_key TEXT NOT NULL UNIQUE,
+    api_key_hash TEXT NOT NULL UNIQUE,
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS approvals (
@@ -52,16 +53,31 @@ def init():
         c.executescript(SCHEMA)
 
 
+def _hash_key(key: str) -> str:
+    return hashlib.sha256(key.encode()).hexdigest()
+
+
 def create_project(name: str, api_key: str | None = None) -> dict:
     key = api_key or "dl_" + secrets.token_urlsafe(24)
     with conn() as c:
         cur = c.execute(
-            "INSERT INTO projects(name, api_key, created_at) VALUES (?,?,?)",
-            (name, key, time.time()),
+            "INSERT INTO projects(name, api_key_hash, created_at) VALUES (?,?,?)",
+            (name, _hash_key(key), time.time()),
         )
         return {"id": cur.lastrowid, "name": name, "api_key": key}
 
 
+def rotate_key(project_id: int) -> dict:
+    """Issue a new API key for a project, invalidating the old one. Returns the plaintext key once."""
+    key = "dl_" + secrets.token_urlsafe(24)
+    with conn() as c:
+        row = c.execute("SELECT name FROM projects WHERE id=?", (project_id,)).fetchone()
+        if not row:
+            raise KeyError(f"no project with id {project_id}")
+        c.execute("UPDATE projects SET api_key_hash=? WHERE id=?", (_hash_key(key), project_id))
+        return {"id": project_id, "name": row["name"], "api_key": key}
+
+
 def project_for_key(key: str):
     with conn() as c:
-        return c.execute("SELECT * FROM projects WHERE api_key=?", (key,)).fetchone()
+        return c.execute("SELECT * FROM projects WHERE api_key_hash=?", (_hash_key(key),)).fetchone()
