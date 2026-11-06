@@ -49,3 +49,9 @@
 **Findings:** BUG-1: a body exactly 1 MiB returns 413 instead of being accepted per SPEC §8; BUG-2: an over-limit chunked body returns 400 instead of 413 per SPEC §8.
 **Why these tests:** They cover per-project isolation, documented fixed-window request counting, required retry metadata, and exact request body size enforcement across declared and streamed bodies.
 **Verified:** `pytest tests/qa/test_rate_limit_body_cap.py -q` — 4 passed, 2 xfailed.
+## 2026-11-06 23:03 - qa/first-pass - pending
+**Focus:** Admin + key lifecycle
+**Tests added:** 3 tests in test_admin_key_lifecycle.py: unset admin key denial for create and rotate, wrong admin key rejection, and key rotation invalidation with newly issued keys.
+**Findings:** BUG-3: admin endpoints return 401 when DRIFTLINE_ADMIN_KEY is unset, instead of the 403 required by SPEC section 3; captured as a strict xfail.
+**Why these tests:** They cover disabled-by-default admin access and verify that rotation replaces the active credential while returning the new key.
+**Verified:** pytest tests/qa -q - 52 passed, 3 xfailed.

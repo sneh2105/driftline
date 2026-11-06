@@ -14,7 +14,7 @@
 - A security expectation that fails is a BUG-n strict xfail, labeled SECURITY in the reason.
 
 - [x] 7 Rate limit + body cap (SPEC 8): 300 req/60s per project, 429 + Retry-After, batch counts as one, project B unaffected by project A flooding, 413 over 1MB (Content-Length and chunked), exactly 1MB accepted
-- [ ] 8 Admin + key lifecycle (SPEC 3): admin endpoints 403 when env unset, 401 wrong admin key, rotated key invalidates the old one, plaintext key never returned after creation
+- [x] 8 Admin + key lifecycle (SPEC 3): admin endpoints 403 when env unset, 401 wrong admin key, rotated key invalidates the old one, plaintext key never returned after creation
 - [ ] 9 Digest delivery (SPEC 11): /v1/digest/send with nothing configured gives 200 and both disabled; Slack via a local fake webhook server; one channel failing does not block the other; SMTP needs both HOST and TO
 - [ ] 10 Guardrail depth (SPEC 12): another project's run id gives 404; limit bounds 1..200; non-http adapter_url gives 422; adapter timeout or bad JSON gives passed null; SECURITY: adapter_url http://169.254.169.254/ and other link-local or private targets must be rejected (strict xfail if accepted)
 - [ ] 11 Tenant isolation on EVERY read endpoint: approvers/{name}, digest, guardrail runs, with two projects holding different data
