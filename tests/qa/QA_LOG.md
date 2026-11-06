@@ -55,3 +55,10 @@
 **Findings:** BUG-3: admin endpoints return 401 when DRIFTLINE_ADMIN_KEY is unset, instead of the 403 required by SPEC section 3; captured as a strict xfail.
 **Why these tests:** They cover disabled-by-default admin access and verify that rotation replaces the active credential while returning the new key.
 **Verified:** pytest tests/qa -q - 52 passed, 3 xfailed.
+
+## 2026-11-06 23:05 - qa/first-pass - pending
+**Focus:** Digest delivery
+**Tests added:** 4 tests in test_digest_delivery.py: both channels disabled when unconfigured; Slack webhook receives a digest; SMTP still sends when Slack fails; and email stays disabled when either SMTP HOST or TO is missing.
+**Findings:** none
+**Why these tests:** They cover the delivery defaults, payload handoff, channel failure isolation, and SMTP activation rules specified in SPEC section 11.
+**Verified:** `pytest tests/qa/test_digest_delivery.py -q` - 4 passed, 0 xfailed.
