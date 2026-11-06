@@ -69,3 +69,9 @@
 **Findings:** BUG-4 SECURITY: http://169.254.169.254/ is accepted as an adapter target, contrary to the focus area's SSRF security expectation; strict xfail. Adapter errors produced inconclusive probe results as specified.
 **Why these tests:** They cover run ownership, exact list bounds, scheme validation, adapter failure handling, and guard against requests to cloud metadata endpoints.
 **Verified:** `pytest tests/qa/test_guardrail_depth.py -q` - 9 passed, 1 xfailed; `pytest tests/qa -q` - 65 passed, 4 xfailed.
+## 2026-11-06 23:11 - qa/first-pass - pending
+**Focus:** Tenant isolation on every read endpoint
+**Tests added:** 3 tests in test_read_tenant_isolation.py: approver detail hides another project's reviewer; digest output includes only the current project's flagged reviewer; guardrail run listing contains only the current project's runs.
+**Findings:** none
+**Why these tests:** They verify project scoping on the remaining read surfaces in SPEC sections 3, 6, and 12, using distinct project data and checking both directions of visibility.
+**Verified:** pytest tests/qa/test_read_tenant_isolation.py -q - 3 passed, 0 xfailed.

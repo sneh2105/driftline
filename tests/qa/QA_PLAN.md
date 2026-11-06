@@ -17,7 +17,7 @@
 - [x] 8 Admin + key lifecycle (SPEC 3): admin endpoints 403 when env unset, 401 wrong admin key, rotated key invalidates the old one, plaintext key never returned after creation
 - [x] 9 Digest delivery (SPEC 11): /v1/digest/send with nothing configured gives 200 and both disabled; Slack via a local fake webhook server; one channel failing does not block the other; SMTP needs both HOST and TO
 - [x] 10 Guardrail depth (SPEC 12): another project's run id gives 404; limit bounds 1..200; non-http adapter_url gives 422; adapter timeout or bad JSON gives passed null; SECURITY: adapter_url http://169.254.169.254/ and other link-local or private targets must be rejected (strict xfail if accepted)
-- [ ] 11 Tenant isolation on EVERY read endpoint: approvers/{name}, digest, guardrail runs, with two projects holding different data
+- [x] 11 Tenant isolation on EVERY read endpoint: approvers/{name}, digest, guardrail runs, with two projects holding different data
 - [ ] 12 Flag thresholds (SPEC 5): each flag fires at its threshold and not one below (e.g. fast_median n=19 vs 20, zero_rejects n=49 vs 50)
 - [ ] 13 CORS (SPEC 10): default origins are localhost only, never a wildcard; a foreign Origin gets no Access-Control-Allow-Origin
 - [ ] 14 Redo boundaries: approver exactly 200 / 201 chars, action exactly 500 / 501; SDK tests rewritten against a real fake server using public methods only
