@@ -1,5 +1,5 @@
 # QA plan (Codex ticks these)
-- [ ] 1 Ingest validation
+- [x] 1 Ingest validation
 - [ ] 2 Scoring properties
 - [ ] 3 Auth + tenant isolation
 - [ ] 4 SDK failure modes
