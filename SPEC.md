@@ -48,6 +48,7 @@ Thresholds are in CONFIG and exposed at GET /v1/config.
 - GET /v1/overview?days=1..365 (default 30): org score, per-approver list worst-first (null scores last), flagged_count, trend
 - GET /v1/approvers/{name}?days=: detail, histogram (6 buckets), trend, last 25 events. Unknown -> 404
 - GET /v1/digest?days=1..90 (default 7): plain text + flagged names
+- POST /v1/digest/send?days=1..90 (default 7): same digest as above, plus delivers it over configured channels (ยง11); response adds `delivery: {slack, email}`, each `"sent"` / `"disabled"` / `"error: ..."`. No channels configured -> both `"disabled"`, still 200.
 - GET /healthz
 - Out-of-range `days` -> 422.
 
@@ -63,9 +64,15 @@ Thresholds are in CONFIG and exposed at GET /v1/config.
 - POST /v1/approvals and /v1/approvals/batch are rate limited per project: 300 requests / 60s fixed window. Over -> 429 with a `Retry-After` header (seconds). A batch request counts as one request regardless of event count. Counters are in-memory per server process (reset on restart; not shared across processes).
 
 ## 9. Not yet specified (open)
-Multi-user auth, Postgres, digest delivery, Guardrail Health, Cascade Mapper.
+Multi-user auth, Postgres, Guardrail Health, Cascade Mapper.
 
 ## 10. Config via env vars
 - `DRIFTLINE_DB`: path to the SQLite file. Defaults to `driftline.db` at the repo root.
 - `DRIFTLINE_CORS_ORIGINS`: comma-separated list of allowed origins for CORS. Unset -> defaults to `http://localhost:5173,http://127.0.0.1:5173` (the Vite dev server), not a wildcard.
 - `DRIFTLINE_ADMIN_KEY`: see §3.
+
+## 11. Digest delivery
+`POST /v1/digest/send` sends the digest text over Slack and/or email. Each channel is independent and off by default; it only activates once its env vars are set.
+- Slack: `DRIFTLINE_SLACK_WEBHOOK_URL` (incoming webhook URL). Unset -> Slack delivery `"disabled"`.
+- Email (SMTP): requires both `DRIFTLINE_SMTP_HOST` and `DRIFTLINE_SMTP_TO` (comma-separated recipients); either missing -> email delivery `"disabled"`. Optional: `DRIFTLINE_SMTP_PORT` (default 587), `DRIFTLINE_SMTP_USER`, `DRIFTLINE_SMTP_PASSWORD`, `DRIFTLINE_SMTP_FROM` (defaults to `DRIFTLINE_SMTP_USER`), `DRIFTLINE_SMTP_TLS` (default true; `"false"` disables STARTTLS).
+- A send failure on one channel does not block the other; the response reports `"error: ..."` for that channel only.

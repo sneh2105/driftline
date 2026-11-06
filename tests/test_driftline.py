@@ -306,3 +306,83 @@ def test_db_path_configurable_via_env(monkeypatch, tmp_path):
     importlib.reload(db)
     db.init()
     assert custom.exists()
+
+
+# ---- digest delivery (off by default) ----
+
+def test_digest_delivery_disabled_without_config(client, monkeypatch):
+    monkeypatch.delenv("DRIFTLINE_SLACK_WEBHOOK_URL", raising=False)
+    monkeypatch.delenv("DRIFTLINE_SMTP_HOST", raising=False)
+    monkeypatch.delenv("DRIFTLINE_SMTP_TO", raising=False)
+    r = client.post("/v1/digest/send")
+    assert r.status_code == 200
+    assert r.json()["delivery"] == {"slack": "disabled", "email": "disabled"}
+    assert "text" in r.json() and "flagged" in r.json()
+
+
+def test_digest_delivery_sends_slack_when_configured(client, monkeypatch):
+    monkeypatch.setenv("DRIFTLINE_SLACK_WEBHOOK_URL", "https://hooks.slack.test/abc")
+    monkeypatch.delenv("DRIFTLINE_SMTP_HOST", raising=False)
+    calls = {}
+
+    def fake_send_slack(webhook_url, text):
+        calls["webhook_url"] = webhook_url
+        calls["text"] = text
+
+    from server import delivery
+    monkeypatch.setattr(delivery, "send_slack", fake_send_slack)
+    r = client.post("/v1/digest/send")
+    assert r.status_code == 200
+    assert r.json()["delivery"] == {"slack": "sent", "email": "disabled"}
+    assert calls["webhook_url"] == "https://hooks.slack.test/abc"
+
+
+def test_digest_delivery_sends_email_when_configured(client, monkeypatch):
+    monkeypatch.delenv("DRIFTLINE_SLACK_WEBHOOK_URL", raising=False)
+    monkeypatch.setenv("DRIFTLINE_SMTP_HOST", "smtp.test")
+    monkeypatch.setenv("DRIFTLINE_SMTP_TO", "lead@example.com, other@example.com")
+    calls = {}
+
+    def fake_send_email(cfg, subject, body):
+        calls["cfg"] = cfg
+        calls["subject"] = subject
+        calls["body"] = body
+
+    from server import delivery
+    monkeypatch.setattr(delivery, "send_email", fake_send_email)
+    r = client.post("/v1/digest/send")
+    assert r.status_code == 200
+    assert r.json()["delivery"] == {"slack": "disabled", "email": "sent"}
+    assert calls["cfg"]["to"] == ["lead@example.com", "other@example.com"]
+    assert calls["cfg"]["port"] == 587
+    assert calls["cfg"]["use_tls"] is True
+
+
+def test_digest_delivery_reports_channel_error_without_blocking_other(client, monkeypatch):
+    monkeypatch.setenv("DRIFTLINE_SLACK_WEBHOOK_URL", "https://hooks.slack.test/abc")
+    monkeypatch.setenv("DRIFTLINE_SMTP_HOST", "smtp.test")
+    monkeypatch.setenv("DRIFTLINE_SMTP_TO", "lead@example.com")
+
+    from server import delivery
+
+    def failing_send_slack(webhook_url, text):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(delivery, "send_slack", failing_send_slack)
+    monkeypatch.setattr(delivery, "send_email", lambda cfg, subject, body: None)
+    r = client.post("/v1/digest/send")
+    assert r.status_code == 200
+    body = r.json()["delivery"]
+    assert body["slack"] == "error: boom"
+    assert body["email"] == "sent"
+
+
+def test_smtp_config_requires_host_and_to(monkeypatch):
+    from server import delivery
+    monkeypatch.delenv("DRIFTLINE_SMTP_HOST", raising=False)
+    monkeypatch.delenv("DRIFTLINE_SMTP_TO", raising=False)
+    assert delivery.smtp_config() is None
+    monkeypatch.setenv("DRIFTLINE_SMTP_HOST", "smtp.test")
+    assert delivery.smtp_config() is None  # still missing SMTP_TO
+    monkeypatch.setenv("DRIFTLINE_SMTP_TO", "a@example.com")
+    assert delivery.smtp_config() is not None

@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from starlette.datastructures import Headers
 
-from . import db
+from . import db, delivery
 from .scoring import CONFIG, RISK_LEVELS, RISK_RANK, daily_trend, score_events
 
 from contextlib import asynccontextmanager
@@ -350,6 +350,18 @@ def digest(days: int = Query(7, ge=1, le=90), p=Depends(project)):
         lines.append("")
         lines.append("Question for the control owner: is this gate still a real control?")
     return {"text": "\n".join(lines), "flagged": [n for n, _ in flagged]}
+
+
+@app.post("/v1/digest/send")
+def digest_send(days: int = Query(7, ge=1, le=90), p=Depends(project)):
+    """Send the digest (see GET /v1/digest) over configured channels (Slack webhook / SMTP email).
+
+    Both channels are off by default: with no channel configured, this is a no-op that
+    still returns 200 with each channel marked "disabled" (SPEC.md ยง11).
+    """
+    result = digest(days=days, p=p)
+    status = delivery.deliver_digest(f"Driftline approval digest ({days}d)", result["text"])
+    return {**result, "delivery": status}
 
 
 @app.get("/healthz")
