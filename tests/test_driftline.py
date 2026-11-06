@@ -229,3 +229,45 @@ def test_sdk_roundtrip(client, monkeypatch):
     dl.log_approval(approver="m", action="x", decision="reject", seconds=4.2)
     dl.flush()
     assert sent == {"status": 201, "created": 2}
+
+
+# ---- body size cap + rate limiting ----
+
+def test_oversized_body_rejected(client):
+    from server.app import MAX_BODY_BYTES
+    big = {"approver": "m", "action": "x" * (MAX_BODY_BYTES + 1000), "decision": "approve", "seconds": 1}
+    r = client.post("/v1/approvals", json=big)
+    assert r.status_code == 413
+
+
+def test_body_under_cap_is_fine(client):
+    r = client.post("/v1/approvals", json={"approver": "m", "action": "x", "decision": "approve", "seconds": 1})
+    assert r.status_code == 201
+
+
+def test_ingest_rate_limited(client, monkeypatch):
+    import server.app as appmod
+    monkeypatch.setattr(appmod, "RATE_LIMIT_MAX_REQUESTS", 3)
+    appmod._rate_limit_buckets.clear()
+    body = {"approver": "m", "action": "x", "decision": "approve", "seconds": 1}
+    for _ in range(3):
+        r = client.post("/v1/approvals", json=body)
+        assert r.status_code == 201
+    r = client.post("/v1/approvals", json=body)
+    assert r.status_code == 429
+    assert "Retry-After" in r.headers
+
+
+def test_rate_limit_is_per_project(client, monkeypatch):
+    import server.app as appmod
+    from server import db
+    monkeypatch.setattr(appmod, "RATE_LIMIT_MAX_REQUESTS", 1)
+    appmod._rate_limit_buckets.clear()
+    other = db.create_project("other")
+    body = {"approver": "m", "action": "x", "decision": "approve", "seconds": 1}
+    r = client.post("/v1/approvals", json=body)
+    assert r.status_code == 201
+    r = client.post("/v1/approvals", json=body)
+    assert r.status_code == 429
+    r = client.post("/v1/approvals", json=body, headers={"X-Driftline-Key": other["api_key"]})
+    assert r.status_code == 201

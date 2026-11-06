@@ -58,5 +58,9 @@ Thresholds are in CONFIG and exposed at GET /v1/config.
 - A Review finalizes once; second approve/reject is ignored.
 - `flush()` blocks up to timeout; `close()` flushes at exit.
 
-## 8. Not yet specified (open)
+## 8. Rate limits & body size
+- Every request body is capped at 1MB; over -> 413. Checked via `Content-Length` and re-checked against actual bytes received (covers chunked requests).
+- POST /v1/approvals and /v1/approvals/batch are rate limited per project: 300 requests / 60s fixed window. Over -> 429 with a `Retry-After` header (seconds). A batch request counts as one request regardless of event count. Counters are in-memory per server process (reset on restart; not shared across processes).
+
+## 9. Not yet specified (open)
 Multi-user auth, Postgres, digest delivery, Guardrail Health, Cascade Mapper.

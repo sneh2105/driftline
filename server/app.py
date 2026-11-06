@@ -1,5 +1,6 @@
 import json
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any, Optional, Union
@@ -9,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
+from starlette.datastructures import Headers
 
 from . import db
 from .scoring import CONFIG, RISK_LEVELS, RISK_RANK, daily_trend, score_events
@@ -23,6 +25,60 @@ async def lifespan(_app):
 
 
 app = FastAPI(title="Driftline", version="0.1.0", lifespan=lifespan)
+
+# ---------- request body size cap ----------
+# SPEC.md ยง9: every request body is capped at 1MB, checked up-front via
+# Content-Length and enforced again as bytes stream in (covers chunked
+# requests that omit or lie about Content-Length).
+MAX_BODY_BYTES = 1_000_000
+
+
+class _BodyTooLarge(Exception):
+    pass
+
+
+class BodySizeLimitMiddleware:
+    def __init__(self, asgi_app, max_bytes: int):
+        self.app = asgi_app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        headers = Headers(scope=scope)
+        cl = headers.get("content-length")
+        if cl is not None and cl.isdigit() and int(cl) > self.max_bytes:
+            await self._reject(send)
+            return
+
+        total = 0
+
+        async def guarded_receive():
+            nonlocal total
+            message = await receive()
+            if message["type"] == "http.request":
+                total += len(message.get("body") or b"")
+                if total > self.max_bytes:
+                    raise _BodyTooLarge()
+            return message
+
+        try:
+            await self.app(scope, guarded_receive, send)
+        except _BodyTooLarge:
+            await self._reject(send)
+
+    @staticmethod
+    async def _reject(send):
+        await send({
+            "type": "http.response.start",
+            "status": 413,
+            "headers": [(b"content-type", b"application/json")],
+        })
+        await send({"type": "http.response.body", "body": b'{"detail":"Request body exceeds 1MB limit"}'})
+
+
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
@@ -67,6 +123,33 @@ def admin_rotate_key(project_id: int, _=Depends(require_admin)):
         return db.rotate_key(project_id)
     except KeyError:
         raise HTTPException(404, "Unknown project")
+
+
+# ---------- rate limiting (ingest only) ----------
+# SPEC.md ยง9: fixed-window counter per project. In-memory, so it resets on
+# restart and doesn't span multiple processes -- fine for the single-process
+# v0 deployment this ships for.
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 300
+
+_rate_limit_lock = threading.Lock()
+_rate_limit_buckets: dict[int, tuple[float, int]] = {}
+
+
+def rate_limit_ingest(p=Depends(project)):
+    pid = p["id"]
+    now = time.time()
+    with _rate_limit_lock:
+        window_start, count = _rate_limit_buckets.get(pid, (now, 0))
+        if now - window_start >= RATE_LIMIT_WINDOW_SECONDS:
+            window_start, count = now, 0
+        count += 1
+        _rate_limit_buckets[pid] = (window_start, count)
+        if count > RATE_LIMIT_MAX_REQUESTS:
+            retry_after = max(1, int(RATE_LIMIT_WINDOW_SECONDS - (now - window_start)))
+            raise HTTPException(429, "Rate limit exceeded. Try again later.",
+                                 headers={"Retry-After": str(retry_after)})
+    return p
 
 
 # ---------- ingest ----------
@@ -146,14 +229,14 @@ def _insert(c, pid: int, e: ApprovalIn) -> bool:
 
 
 @app.post("/v1/approvals", status_code=201)
-def ingest(e: ApprovalIn, p=Depends(project)):
+def ingest(e: ApprovalIn, p=Depends(rate_limit_ingest)):
     with db.conn() as c:
         created = _insert(c, p["id"], e)
     return {"ok": True, "duplicate": not created}
 
 
 @app.post("/v1/approvals/batch", status_code=201)
-def ingest_batch(b: BatchIn, p=Depends(project)):
+def ingest_batch(b: BatchIn, p=Depends(rate_limit_ingest)):
     created = 0
     with db.conn() as c:
         for e in b.events:
