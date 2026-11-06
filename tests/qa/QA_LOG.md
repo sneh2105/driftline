@@ -35,3 +35,10 @@
 **Findings:** none
 **Why these tests:** They check the range and missing-resource behavior promised by SPEC §6 and ensure URL encoding does not make valid special-character approver names unreachable.
 **Verified:** `pytest tests/qa/test_api_read_paths.py -q` — 4 passed, 0 xfailed.
+
+## 2026-11-06 22:33 · qa/first-pass · pending
+**Focus:** Guardrail Health diff
+**Tests added:** 2 tests in `test_guardrail_diff.py`: `test_guardrail_diff_reports_only_new_pass_to_fail_regressions` checks first-run emptiness, a new failure, and no repeat alert; `test_guardrail_diff_excludes_improvements_and_adapter_errors` checks improvements and errored calls are excluded.
+**Findings:** none
+**Why these tests:** They verify the regression-only behavior in SPEC §12, guarding against alerting on known failures, improvements, or inconclusive adapter errors.
+**Verified:** `pytest tests/qa/test_guardrail_diff.py -q` — 2 passed, 0 xfailed; `pytest tests/qa -q` — 46 passed, 0 xfailed.
