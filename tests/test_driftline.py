@@ -271,3 +271,38 @@ def test_rate_limit_is_per_project(client, monkeypatch):
     assert r.status_code == 429
     r = client.post("/v1/approvals", json=body, headers={"X-Driftline-Key": other["api_key"]})
     assert r.status_code == 201
+
+
+# ---- config via env vars ----
+
+def _reload_app():
+    import importlib
+    from server import db
+    importlib.reload(db)
+    from server import app as appmod
+    importlib.reload(appmod)
+    return appmod
+
+
+def test_cors_defaults_to_localhost_only(monkeypatch, tmp_path):
+    monkeypatch.setenv("DRIFTLINE_DB", str(tmp_path / "cors1.db"))
+    monkeypatch.delenv("DRIFTLINE_CORS_ORIGINS", raising=False)
+    appmod = _reload_app()
+    assert appmod._cors_origins() == ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def test_cors_origins_configurable_via_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("DRIFTLINE_DB", str(tmp_path / "cors2.db"))
+    monkeypatch.setenv("DRIFTLINE_CORS_ORIGINS", "https://app.example.com, https://admin.example.com")
+    appmod = _reload_app()
+    assert appmod._cors_origins() == ["https://app.example.com", "https://admin.example.com"]
+
+
+def test_db_path_configurable_via_env(monkeypatch, tmp_path):
+    custom = tmp_path / "custom-name.db"
+    monkeypatch.setenv("DRIFTLINE_DB", str(custom))
+    from server import db
+    import importlib
+    importlib.reload(db)
+    db.init()
+    assert custom.exists()

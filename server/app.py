@@ -78,8 +78,17 @@ class BodySizeLimitMiddleware:
         await send({"type": "http.response.body", "body": b'{"detail":"Request body exceeds 1MB limit"}'})
 
 
+def _cors_origins() -> list[str]:
+    # SPEC.md §10: DRIFTLINE_CORS_ORIGINS is a comma-separated allowlist;
+    # unset defaults to localhost only so a fresh deploy isn't wide open.
+    raw = os.environ.get("DRIFTLINE_CORS_ORIGINS")
+    if raw is None:
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
+    return [o.strip() for o in raw.split(",") if o.strip()]
+
+
 app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=_cors_origins(), allow_methods=["*"], allow_headers=["*"])
 
 
 # ---------- auth ----------

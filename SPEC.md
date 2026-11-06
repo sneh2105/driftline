@@ -64,3 +64,8 @@ Thresholds are in CONFIG and exposed at GET /v1/config.
 
 ## 9. Not yet specified (open)
 Multi-user auth, Postgres, digest delivery, Guardrail Health, Cascade Mapper.
+
+## 10. Config via env vars
+- `DRIFTLINE_DB`: path to the SQLite file. Defaults to `driftline.db` at the repo root.
+- `DRIFTLINE_CORS_ORIGINS`: comma-separated list of allowed origins for CORS. Unset -> defaults to `http://localhost:5173,http://127.0.0.1:5173` (the Vite dev server), not a wildcard.
+- `DRIFTLINE_ADMIN_KEY`: see §3.
