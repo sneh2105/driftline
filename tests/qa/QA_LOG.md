@@ -42,3 +42,10 @@
 **Findings:** none
 **Why these tests:** They verify the regression-only behavior in SPEC §12, guarding against alerting on known failures, improvements, or inconclusive adapter errors.
 **Verified:** `pytest tests/qa/test_guardrail_diff.py -q` — 2 passed, 0 xfailed; `pytest tests/qa -q` — 46 passed, 0 xfailed.
+
+## 2026-11-06 23:02 · qa/first-pass · pending
+**Focus:** Rate limit + body cap
+**Tests added:** 6 tests in `test_rate_limit_body_cap.py`: the 301st request returns 429 with Retry-After, a 1000-event batch counts as one request, project B remains available after project A reaches its limit, the exact 1 MiB body boundary, over-limit body rejection, and streamed chunked over-limit rejection.
+**Findings:** BUG-1: a body exactly 1 MiB returns 413 instead of being accepted per SPEC §8; BUG-2: an over-limit chunked body returns 400 instead of 413 per SPEC §8.
+**Why these tests:** They cover per-project isolation, documented fixed-window request counting, required retry metadata, and exact request body size enforcement across declared and streamed bodies.
+**Verified:** `pytest tests/qa/test_rate_limit_body_cap.py -q` — 4 passed, 2 xfailed.
