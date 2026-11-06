@@ -20,7 +20,12 @@ CONFIG = {
     "min_events_zero_reject": 50,
     "min_events_risk": 30,
     "high_risk_fast_seconds": 3.0,
+    "min_events_high_risk_fast": 10,
+    "risk_blind_corr": 0.1,
     "drift_ratio": 0.5,               # last-7d median < 50% of earlier median
+    "drift_window_days": 7,
+    "min_events_drift_recent": 10,
+    "min_events_drift_older": 20,
     "healthy_risk_corr": 0.4,
     "score_healthy": 70,
     "score_watch": 40,
@@ -147,14 +152,14 @@ def _flags(events, median_s, reject_rate, corr, by_risk, now) -> list[dict]:
         })
 
     hi = [s for r, v in by_risk.items() if r >= 2 for s in v]
-    if len(hi) >= 10 and statistics.median(hi) < CONFIG["high_risk_fast_seconds"]:
+    if len(hi) >= CONFIG["min_events_high_risk_fast"] and statistics.median(hi) < CONFIG["high_risk_fast_seconds"]:
         flags.append({
             "code": "high_risk_fast", "severity": "high",
             "title": "High-risk actions approved in seconds",
             "detail": f"Median {statistics.median(hi):.1f}s on {len(hi)} high/critical actions.",
         })
 
-    if n >= CONFIG["min_events_risk"] and len(by_risk) >= 2 and corr is not None and corr < 0.1:
+    if n >= CONFIG["min_events_risk"] and len(by_risk) >= 2 and corr is not None and corr < CONFIG["risk_blind_corr"]:
         flags.append({
             "code": "risk_blind", "severity": "medium",
             "title": "Review time ignores risk",
@@ -162,9 +167,10 @@ def _flags(events, median_s, reject_rate, corr, by_risk, now) -> list[dict]:
         })
 
     if now is not None:
-        recent = [e["seconds"] for e in events if e["ts"] >= now - 7 * 86400]
-        older = [e["seconds"] for e in events if e["ts"] < now - 7 * 86400]
-        if len(recent) >= 10 and len(older) >= 20:
+        cutoff = now - CONFIG["drift_window_days"] * 86400
+        recent = [e["seconds"] for e in events if e["ts"] >= cutoff]
+        older = [e["seconds"] for e in events if e["ts"] < cutoff]
+        if len(recent) >= CONFIG["min_events_drift_recent"] and len(older) >= CONFIG["min_events_drift_older"]:
             r_med, o_med = statistics.median(recent), statistics.median(older)
             if o_med > 0 and r_med < o_med * CONFIG["drift_ratio"]:
                 flags.append({

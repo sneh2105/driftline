@@ -53,6 +53,15 @@ def test_speed_drift_flag():
     assert "speed_drift" in {f["code"] for f in s["flags"]}
 
 
+def test_flag_thresholds_are_configurable():
+    """SPEC.md says every flag threshold lives in CONFIG (and is exposed at GET /v1/config),
+    not hardcoded in the flag logic."""
+    from server.scoring import CONFIG
+    required = {"min_events_high_risk_fast", "risk_blind_corr", "drift_window_days",
+                "min_events_drift_recent", "min_events_drift_older"}
+    assert required <= CONFIG.keys()
+
+
 def test_small_samples_dont_flag():
     s = score_events([ev(seconds=1, risk=3) for _ in range(5)], NOW)
     assert s["flags"] == []
@@ -80,6 +89,15 @@ def client(monkeypatch, tmp_path):
     with TestClient(appmod.app) as c:
         c.headers.update({"X-Driftline-Key": "dl_test"})
         yield c
+
+
+def test_config_endpoint_exposes_flag_thresholds(client):
+    r = client.get("/v1/config")
+    assert r.status_code == 200
+    thresholds = r.json()["thresholds"]
+    for key in ("min_events_high_risk_fast", "risk_blind_corr", "drift_window_days",
+                "min_events_drift_recent", "min_events_drift_older"):
+        assert key in thresholds
 
 
 def test_auth_required(client):
