@@ -28,3 +28,10 @@
 **Findings:** none
 **Why these tests:** They cover the SDK guarantees in SPEC ?7 for retries, idempotency, bounded queue behavior, one-time review finalization, and non-blocking non-raising calls.
 **Verified:** `pytest tests/qa/test_sdk_failure_modes.py -q` ? 6 passed, 0 xfailed.
+
+## 2026-11-06 22:30 · qa/first-pass · pending
+**Focus:** API read paths
+**Tests added:** 3 tests in `test_api_read_paths.py` (one parameterized): documented minimum/maximum `days` bounds for overview and digest, unknown approver 404, and retrieval of an approver name containing spaces, URL-reserved punctuation, and Unicode.
+**Findings:** none
+**Why these tests:** They check the range and missing-resource behavior promised by SPEC §6 and ensure URL encoding does not make valid special-character approver names unreachable.
+**Verified:** `pytest tests/qa/test_api_read_paths.py -q` — 4 passed, 0 xfailed.

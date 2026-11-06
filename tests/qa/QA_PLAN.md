@@ -3,5 +3,5 @@
 - [x] 2 Scoring properties
 - [x] 3 Auth + tenant isolation
 - [x] 4 SDK failure modes
-- [ ] 5 API read paths
+- [x] 5 API read paths
 - [ ] 6 Guardrail Health diff
