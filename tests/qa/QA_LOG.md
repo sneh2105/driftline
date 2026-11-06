@@ -20,3 +20,11 @@
 **Findings:** none
 **Why these tests:** They check the documented 401 behavior for absent or invalid credentials and verify that each project's key only sees its own approval records.
 **Verified:** `pytest tests/qa/test_auth.py -q` — 3 passed, 0 xfailed.
+
+
+## 2026-11-06 22:28 ? qa/first-pass ? pending
+**Focus:** SDK failure modes
+**Tests added:** 6 tests in `test_sdk_failure_modes.py`: network failure requeue and event identity, 5xx retry identity without duplicate queue entries, full queue drops without raising, approve/reject double-finalization in both orders, and public logging calls surviving network errors.
+**Findings:** none
+**Why these tests:** They cover the SDK guarantees in SPEC ?7 for retries, idempotency, bounded queue behavior, one-time review finalization, and non-blocking non-raising calls.
+**Verified:** `pytest tests/qa/test_sdk_failure_modes.py -q` ? 6 passed, 0 xfailed.
