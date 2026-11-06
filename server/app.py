@@ -12,7 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, model_validator
 from starlette.datastructures import Headers
 
-from . import db, delivery
+from . import db, delivery, guardrail
 from .scoring import CONFIG, RISK_LEVELS, RISK_RANK, daily_trend, score_events
 
 from contextlib import asynccontextmanager
@@ -367,6 +367,47 @@ def digest_send(days: int = Query(7, ge=1, le=90), p=Depends(project)):
 @app.get("/healthz")
 def healthz():
     return {"ok": True}
+
+
+# ---------- guardrail health v0 ----------
+
+class GuardrailRunIn(BaseModel):
+    adapter_url: str = Field(min_length=1, max_length=2000,
+                              description="HTTP(S) endpoint accepting POST {prompt} -> {response}")
+
+    @model_validator(mode="after")
+    def _check(self):
+        if not (self.adapter_url.startswith("http://") or self.adapter_url.startswith("https://")):
+            raise ValueError("adapter_url must be http:// or https://")
+        return self
+
+
+@app.post("/v1/guardrail/run", status_code=201)
+def guardrail_run_create(body: GuardrailRunIn, p=Depends(project)):
+    """Run every probe once against the given adapter, store the run, and diff
+    it against the project's previous run (regressions only; SPEC.md ยง12)."""
+    probes = guardrail.load_probes()
+    results = guardrail.run_probes(probes, lambda prompt: guardrail.call_adapter(body.adapter_url, prompt))
+    source = probes[0].source if probes else "builtin"
+    baseline = db.latest_guardrail_run(p["id"])
+    saved = db.save_guardrail_run(p["id"], source, results)
+    regressions = guardrail.diff_regressions(baseline["results"] if baseline else None, results)
+    return {**saved, "regressions": regressions}
+
+
+@app.get("/v1/guardrail/runs")
+def guardrail_runs_index(limit: int = Query(20, ge=1, le=200), p=Depends(project)):
+    return {"runs": db.guardrail_runs_list(p["id"], limit)}
+
+
+@app.get("/v1/guardrail/runs/{run_id}")
+def guardrail_run_detail(run_id: int, p=Depends(project)):
+    run = db.guardrail_run(run_id, p["id"])
+    if not run:
+        raise HTTPException(404, "Unknown guardrail run")
+    baseline = db.previous_guardrail_run(p["id"], run_id)
+    regressions = guardrail.diff_regressions(baseline["results"] if baseline else None, run["results"])
+    return {**run, "regressions": regressions}
 
 
 # ---------- static UI ----------

@@ -377,6 +377,122 @@ def test_digest_delivery_reports_channel_error_without_blocking_other(client, mo
     assert body["email"] == "sent"
 
 
+# ---- guardrail health v0 ----
+
+def test_load_probes_falls_back_to_builtin_without_jailbreakbench():
+    from server import guardrail
+    probes = guardrail.load_probes()
+    assert len(probes) > 0
+    assert all(p.source == "builtin" for p in probes)
+    assert all(p.id and p.category and p.prompt for p in probes)
+
+
+def test_classify_response_detects_refusal():
+    from server import guardrail
+    assert guardrail.classify_response("I can't help with that request.") is True
+    assert guardrail.classify_response("Sure! Step one, gather materials...") is False
+
+
+def test_run_probes_records_adapter_error_without_crashing():
+    from server import guardrail
+    probes = [guardrail.Probe(id="x", category="c", prompt="p", source="builtin")]
+
+    def boom(prompt):
+        raise RuntimeError("timeout")
+
+    results = guardrail.run_probes(probes, boom)
+    assert results[0]["passed"] is None
+    assert results[0]["error"] == "timeout"
+
+
+def test_run_probes_classifies_pass_and_fail():
+    from server import guardrail
+    probes = [
+        guardrail.Probe(id="a", category="c", prompt="p1", source="builtin"),
+        guardrail.Probe(id="b", category="c", prompt="p2", source="builtin"),
+    ]
+    responses = {"p1": "I cannot assist with that.", "p2": "Sure, here you go..."}
+    results = guardrail.run_probes(probes, lambda p: responses[p])
+    by_id = {r["probe_id"]: r for r in results}
+    assert by_id["a"]["passed"] is True
+    assert by_id["b"]["passed"] is False
+
+
+def test_diff_regressions_only_flags_new_failures():
+    from server import guardrail
+    baseline = [
+        {"probe_id": "a", "category": "c", "passed": True, "response_snippet": ""},
+        {"probe_id": "b", "category": "c", "passed": False, "response_snippet": ""},
+        {"probe_id": "c", "category": "c", "passed": True, "response_snippet": ""},
+    ]
+    current = [
+        {"probe_id": "a", "category": "c", "passed": False, "response_snippet": "now complies"},
+        {"probe_id": "b", "category": "c", "passed": True, "response_snippet": ""},
+        {"probe_id": "c", "category": "c", "passed": True, "response_snippet": ""},
+    ]
+    regressions = guardrail.diff_regressions(baseline, current)
+    assert [r["probe_id"] for r in regressions] == ["a"]
+
+
+def test_diff_regressions_no_baseline_means_no_regressions():
+    from server import guardrail
+    current = [{"probe_id": "a", "category": "c", "passed": False, "response_snippet": ""}]
+    assert guardrail.diff_regressions(None, current) == []
+
+
+def test_guardrail_run_endpoint_stores_and_returns_results(client, monkeypatch):
+    from server import guardrail as guardrail_mod
+    monkeypatch.setattr(guardrail_mod, "call_adapter", lambda url, prompt: "I cannot help with that.")
+    r = client.post("/v1/guardrail/run", json={"adapter_url": "https://agent.example.com/probe"})
+    assert r.status_code == 201
+    body = r.json()
+    assert body["n"] == len(guardrail_mod.load_probes()) > 0
+    assert body["failed"] == 0
+    assert body["regressions"] == []  # first run, no baseline to regress against
+
+
+def test_guardrail_run_flags_regression_on_second_run(client, monkeypatch):
+    from server import guardrail as guardrail_mod
+    monkeypatch.setattr(guardrail_mod, "call_adapter", lambda url, prompt: "I cannot help with that.")
+    r1 = client.post("/v1/guardrail/run", json={"adapter_url": "https://agent.example.com/probe"})
+    assert r1.json()["failed"] == 0
+
+    monkeypatch.setattr(guardrail_mod, "call_adapter", lambda url, prompt: "Sure, here's how...")
+    r2 = client.post("/v1/guardrail/run", json={"adapter_url": "https://agent.example.com/probe"})
+    body = r2.json()
+    assert body["failed"] == body["n"]
+    assert len(body["regressions"]) == body["n"]
+
+
+def test_guardrail_runs_list_and_detail(client, monkeypatch):
+    from server import guardrail as guardrail_mod
+    monkeypatch.setattr(guardrail_mod, "call_adapter", lambda url, prompt: "I cannot help with that.")
+    r = client.post("/v1/guardrail/run", json={"adapter_url": "https://agent.example.com/probe"})
+    run_id = r.json()["id"]
+
+    listing = client.get("/v1/guardrail/runs").json()
+    assert listing["runs"][0]["id"] == run_id
+
+    detail = client.get(f"/v1/guardrail/runs/{run_id}").json()
+    assert detail["id"] == run_id and "results" in detail and "regressions" in detail
+    assert client.get("/v1/guardrail/runs/999999").status_code == 404
+
+
+def test_guardrail_run_rejects_non_http_adapter_url(client):
+    r = client.post("/v1/guardrail/run", json={"adapter_url": "file:///etc/passwd"})
+    assert r.status_code == 422
+
+
+def test_guardrail_runs_scoped_to_project(client, monkeypatch):
+    from server import db, guardrail as guardrail_mod
+    monkeypatch.setattr(guardrail_mod, "call_adapter", lambda url, prompt: "I cannot help with that.")
+    r = client.post("/v1/guardrail/run", json={"adapter_url": "https://agent.example.com/probe"})
+    run_id = r.json()["id"]
+    other = db.create_project("other2")
+    resp = client.get(f"/v1/guardrail/runs/{run_id}", headers={"X-Driftline-Key": other["api_key"]})
+    assert resp.status_code == 404
+
+
 def test_smtp_config_requires_host_and_to(monkeypatch):
     from server import delivery
     monkeypatch.delenv("DRIFTLINE_SMTP_HOST", raising=False)
