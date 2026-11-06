@@ -13,3 +13,10 @@
 **Findings:** none
 **Why these tests:** They check the scoring invariants from SPEC §4 and the minimum sample and empty-data behavior from SPEC §5 across generated inputs.
 **Verified:** `pytest tests/qa -q` — 31 passed, 0 xfailed.
+
+## 2026-11-06 22:27 Â· qa/first-pass Â· pending
+**Focus:** Auth + tenant isolation
+**Tests added:** 3 tests in `test_auth.py`: missing/invalid key rejection, bearer key acceptance, and project key data isolation.
+**Findings:** none
+**Why these tests:** They check the documented 401 behavior for absent or invalid credentials and verify that each project's key only sees its own approval records.
+**Verified:** `pytest tests/qa/test_auth.py -q` â€” 3 passed, 0 xfailed.

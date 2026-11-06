@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     monkeypatch.setenv("DRIFTLINE_DB", str(tmp_path / "qa.db"))
+    monkeypatch.setenv("DRIFTLINE_ADMIN_KEY", "dl_qa_admin")
     from server import db
     from server import app as appmod
 
